@@ -1,0 +1,59 @@
+#+title: Readme
+
+* Couchdb sento
+
+Couchdb sento was created to wrap up a [[https://github.com/lost-rob0t/cl-couch][CL-COUCH]] client.
+
+
+** Install
+
+#+begin_src lisp
+(ql:quickload :couchdb-sento)
+#+end_src
+
+#+RESULTS:
+| :COUCHDB-SENTO |
+
+
+** Example
+
+Setup couchdb with docker
+
+Note that this is a older image, but bundles a fts index service
+#+Name: Setup docker
+#+begin_src sh :async :results none
+mkdir -p $PWD/.database && sudo chown 1001:1001 $PWD/.database && docker run -d  -e COUCHDB_USER=admin -e COUCHDB_PASSWORD=password  -v $PWD/.database:/opt/couchdb/data  -p 0.0.0.0:5984:5984 ibmcom/couchdb3
+#+end_src
+
+Define gets/puts using the make-service functions.
+#+begin_src lisp :tangle ./service-example.lisp
+(uiop:define-package   :couchdb-sento-example
+  (:use       :couchdb-sento)
+  (:documentation "Examples for couchdb-sento"))
+
+(defvar *sys* (asys:make-actor-system))
+(defvar *couchdb-agent* (make-couchdb-agent *sys*))
+(defvar *puts* (make-insert-service *couchdb-agent* *sys* "puts"))
+(defvar *gets* (make-get-service *couchdb-agent* *sys* "gets"))
+#+end_src
+
+You can also define your own service. I only made the most basic actors for common tasks.
+
+Here is a simple actor that querys a full text index.
+#+begin_src lisp :tangle ./source/service-example.lisp
+(defun make-fts-service (agent system name)
+  (define-couchdb-service (agent system client :actor-name name)
+    (cl-couch:fts-search client (jsown:to-json
+                                 (jsown:new-js
+                                   ("q" (get-arg :q))
+                                   ("limit" (or (get-arg :limit) 25))
+                                   ("include-docs" "false"))))))
+#+end_src
+
+Get arge is a flet that graps a plist key.
+
+Messages are assumed to be in plists form.
+example get msg
+#+begin_src lisp :tangle ./service-example.lisp :results
+'(:id "example_id" :database "database-name" :rev "optional-rev")
+#+end_src
