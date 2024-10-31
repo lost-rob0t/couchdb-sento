@@ -28,14 +28,41 @@ mkdir -p $PWD/.database && sudo chown 1001:1001 $PWD/.database && docker run -d 
 Define gets/puts using the make-service functions.
 #+begin_src lisp :tangle ./service-example.lisp
 (uiop:define-package   :couchdb-sento-example
-  (:use       :couchdb-sento)
+  (:use       :couchdb-sento :cl :cl-couch)
   (:documentation "Examples for couchdb-sento"))
-
+(in-package :couchdb-sento-example)
 (defvar *sys* (asys:make-actor-system))
 (defvar *couchdb-agent* (make-couchdb-agent *sys*))
 (defvar *puts* (make-insert-service *couchdb-agent* *sys* "puts"))
 (defvar *gets* (make-get-service *couchdb-agent* *sys* "gets"))
+(defvar *doc-id* 0)
 #+end_src
+
+#+RESULTS:
+: *DOC-ID*
+
+Put a document, ommiting the json key ~_id~ will have couchdb generate one for you, which will be included in the response along with the ~_rev~ key.
+
+This example creates a new document ~couch?~ returns a future
+#+begin_src lisp :tangle ./source/service-example.lisp
+(couch? *puts* 5 :database "testing" :document (jsown:to-json
+                                              (jsown:new-js
+                                                ("_id" (format nil "~a" (incf *doc-id*)))
+                                                ("data" (dex:get "http://httpbin.org/links/60/1")))))
+#+end_src
+
+#+RESULTS:
+: #<SENTO.FUTURE:FUTURE promise: #<PROMISE finished: NIL errored: NIL forward: NIL {100FC880C3}>>
+
+#+begin_src lisp :tangle ./service-example.lisp
+(future:fcompleted
+     (couch? *gets* 5 :database "testing" :id (format nil "~a" *doc-id*))
+     (result)
+   (format t "The rev is: ~a" (jsown:val (jsown:parse result) "_rev")))
+#+end_src
+
+#+RESULTS:
+: #<SENTO.FUTURE:FUTURE promise: #<PROMISE finished: NIL errored: NIL forward: NIL {100F08A603}>>
 
 You can also define your own service. I only made the most basic actors for common tasks.
 
@@ -47,7 +74,44 @@ Here is a simple actor that querys a full text index.
                                  (jsown:new-js
                                    ("q" (get-arg :q))
                                    ("limit" (or (get-arg :limit) 25))
-                                   ("include-docs" "false"))))))
+                                   ("include-docs" "false"))) (get-arg :database) (get-arg :ddoc) (get-arg :view-name))))
+#+end_src
+
+And here is what the macro expands to
+#+begin_src lisp :results none
+(sento.actor-context:actor-of system :name name :receive
+                              (lambda (#:msg4767)
+                                (sento.tasks:with-context (system :shared)
+                                  (let* ((couchdb-sento::*msg* #:msg4767)
+                                         (#:sender4768 sento.actor:*sender*)
+                                         (couchdb-sento::fut
+                                          (sento.future:with-fut
+                                            (with-couchdb-agent (client agent)
+                                              (flet ((couchdb-sento::get-arg
+                                                         (couchdb-sento::arg)
+                                                       (getf
+                                                        couchdb-sento::*msg*
+                                                        couchdb-sento::arg)))
+                                                (fts-search client
+                                                            (jsown:to-json
+                                                             (jsown:new-js
+                                                               ("q"
+                                                                (get-arg :q))
+                                                               ("limit"
+                                                                (or
+                                                                 (get-arg
+                                                                  :limit)
+                                                                 25))
+                                                               ("include-docs"
+                                                                "false")))
+                                                            (get-arg :database)
+                                                            (get-arg :ddoc)
+                                                            (get-arg
+                                                             :view-name)))))))
+                                    (sento.future:fcompleted couchdb-sento::fut
+                                        (couchdb-sento::result)
+                                      (sento.actor:reply couchdb-sento::result
+                                                         #:sender4768))))))
 #+end_src
 
 Get arge is a flet that graps a plist key.
