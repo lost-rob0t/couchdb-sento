@@ -1,0 +1,18 @@
+#+title: Tasks
+
+* Sly load project
+This will quickload the project and eval the dev script that defines a actor
+#+Name:Init Dev env
+#+begin_src emacs-lisp
+(sly-quickload "couchdb-sento")
+(sly-load-file "init.lisp")
+#+end_src
+
+#+begin_src emacs-lisp
+#+end_src
+* Start Proxy
+
+#+NAME: start zap
+#+begin_src sh :async :results none
+zap
+#+end_src

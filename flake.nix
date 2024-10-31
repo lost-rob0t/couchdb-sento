@@ -15,8 +15,8 @@
           pkg-config
           roswell
           sbcl
+          zap # for inspecting requests
 
-          # normally stuff goes in here
         ];
         shellHook = ''
               export LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath([pkgs.openssl])}
